@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>UNO INFINITY - Battle Royale V12.0 (Split UI)</title>
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -15,26 +16,6 @@
             -webkit-touch-callout: none;
             touch-action: none; 
         }
-
-        /* 移动端强制横屏提示 */
-        #orientation-lock {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #000;
-            z-index: 99999;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: #4a86e8;
-            text-align: center;
-            touch-action: none;
-        }
-        #orientation-lock svg { width: 64px; height: 64px; margin-bottom: 20px; animation: rotate-phone 2s infinite; }
-        @media screen and (orientation: portrait) {
-            #orientation-lock { display: flex; }
-        }
-        @keyframes rotate-phone { 0%, 10% { transform: rotate(0); } 50%, 60% { transform: rotate(90deg); } 100% { transform: rotate(90deg); } }
 
         /* 加载动画 */
         #loader {
@@ -69,7 +50,7 @@
             z-index: 100;
         }
         
-        /* 左侧窄边设置栏 */
+        /* 左侧设置栏 */
         #header {
             position: absolute;
             top: 0;
@@ -94,12 +75,12 @@
             transform: translateX(-100%);
         }
 
-        /* 右侧侧边栏 (新) */
+        /* 右侧侧边栏 */
         #right-sidebar {
             position: absolute;
             top: 0;
             right: 0;
-            width: 180px; /* 更窄 */
+            width: 180px; 
             height: 100dvh;
             color: white;
             pointer-events: auto;
@@ -183,9 +164,6 @@
             user-select: none;
         }
         .accordion-header:hover { background: rgba(255, 255, 255, 0.1); }
-        .accordion-header::after {
-            content: '▶'; font-size: 0.6rem; transition: transform 0.2s;
-        }
         .accordion-group.active .accordion-header::after { transform: rotate(90deg); }
         .accordion-content {
             max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out;
@@ -240,7 +218,7 @@
             background: #4a86e8; color: black; box-shadow: 0 0 10px rgba(74, 134, 232, 0.5); border-color: #4a86e8;
         }
 
-        /* 紧凑图标按钮 (用于右侧计时器) */
+        /* 紧凑图标按钮 */
         .icon-btn-row {
             display: flex; gap: 4px; margin-bottom: 4px;
         }
@@ -291,7 +269,7 @@
         #btn-view-lock-floating:hover { background: #4a86e8; border-color: #4a86e8; transform: scale(1.1); }
         #btn-view-lock-floating.locked { background: #ff4444; border-color: #ff4444; box-shadow: 0 0 15px rgba(255, 68, 68, 0.5); }
 
-        /* 玩家列表样式 (右侧) */
+        /* 玩家列表样式 */
         #player-list-container {
             display: flex; flex-direction: column; gap: 5px; max-height: 400px; overflow-y: auto; margin-top: 5px;
         }
@@ -348,11 +326,6 @@
 </head>
 <body>
 
-    <div id="orientation-lock">
-        <svg viewBox="0 0 24 24" fill="white"><path d="M17,1.01L7,1C5.9,1,5,1.9,5,3v18c0,1.1,0.9,2,2,2h10c1.1,0,2-0.9,2-2V3C19,1.9,18.1,1.01,17,1.01z M17,19H7V5h10V19z"/></svg>
-        <div>SYSTEM LOCKED<br>PLEASE ROTATE DEVICE</div>
-    </div>
-
     <div id="loader">
         <div class="loader-ring"></div>
         <div id="loader-text">INITIALIZING GRAVITY WELL</div>
@@ -365,6 +338,16 @@
                 <div>
                     <h1>UNO INFINITY</h1>
                     <div class="subtitle">BATTLE ROYALE V12.0</div>
+                </div>
+
+                <div class="accordion-group">
+                    <div class="accordion-header">BATCH IMPORT</div>
+                    <div class="accordion-content" style="display:flex; flex-direction:column; gap:8px;">
+                        <textarea id="card-urls-input" placeholder="直接在此粘贴URL列表（每行一个URL，无需编号）" rows="5" 
+                            style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 8px; font-size: 0.7rem; width: 100%; box-sizing: border-box; border-radius: 4px; font-family: monospace; resize: vertical; min-height: 80px;"></textarea>
+                        <button class="ctrl-btn" id="btn-import-card-urls" style="margin-top: 5px; margin-bottom: 5px;">IMPORT & RELOAD</button>
+                        <button class="ctrl-btn" id="btn-export-card-urls" style="background: rgba(255,255,255,0.05); font-size: 0.6rem;">EXPORT CURRENT</button>
+                    </div>
                 </div>
 
                 <div class="accordion-group">
@@ -563,7 +546,7 @@
                 <div class="accordion-group active">
                     <div class="accordion-header">PLAYERS</div>
                     <div class="accordion-content">
-                        <div style="font-size:0.6rem; color:#888; letter-spacing:1px; margin-bottom:5px;">ALIVE (Single:Lock / Double:Kill)</div>
+                        <div style="font-size:0.6rem; color:#888; letter-spacing:1px; margin-bottom:5px;">ALIVE (Controlled by Sync)</div>
                         <div id="player-list-container"></div>
                     </div>
                 </div>
@@ -573,7 +556,7 @@
 
         <button id="btn-view-lock-floating" title="Lock/Unlock View Rotation">🔓</button>
 
-        <div id="info-panel">
+        <div id="info-panel" style="display:none;">
             <div class="panel-header">
                 <div class="panel-id" id="p-id">S1</div>
                 <div class="panel-title" id="p-title">Card Name</div>
@@ -593,7 +576,15 @@
         import gsap from 'https://unpkg.com/gsap@3.12.5/index.js';
 
         // ==========================================
-        // UI & INTERACTION LOGIC
+        // MQTT 组网配置与状态池 (双向高频轮询对账版)
+        // ==========================================
+        let mqttClient = null;
+        const roomCode = '888888';
+        let v2State = { eliminated: {} };
+        let lastSyncedActivePlayerIds = "";
+
+        // ==========================================
+        // UI & 运行状态控制
         // ==========================================
         
         window.addEventListener('click', (e) => {
@@ -633,7 +624,6 @@
             const name = prompt("Enter Preset Name:", "Config " + (savedPresets.length + 1));
             if (!name) return;
             
-            // Record active state of players for persistence
             const playerActiveStates = playersData.map(p => p.active);
 
             const config = {
@@ -674,21 +664,17 @@
             if (config.cardsVisible !== undefined && config.cardsVisible !== isCardVisible) { document.getElementById('btn-toggle-cards').click(); }
             if (config.avatarsVisible !== undefined && config.avatarsVisible !== isPlayerAvatarsVisible) { document.getElementById('btn-toggle-players').click(); }
             
-            // Restore Trails State
             if (config.trailsEnabled !== undefined && config.trailsEnabled !== isTrailsEnabled) {
                 document.getElementById('btn-toggle-trails').click();
             }
             
-            // Restore Player States
             if (config.playerStates && Array.isArray(config.playerStates)) {
-                 // Reset all first
                  playersData.forEach(p => { 
                      p.active = true; 
                      p.uiBtn.classList.remove('eliminated'); 
                      const mesh = playerMeshes.find(m => m.userData.id === p.id);
                      if(mesh) { mesh.scale.setScalar(avatarSizeScale); mesh.userData.isFrozen = false; }
                  });
-                 // Apply dead states
                  config.playerStates.forEach((isActive, idx) => {
                      if (!isActive && playersData[idx]) { togglePlayer(idx, null); }
                  });
@@ -738,7 +724,7 @@
         renderPresets();
 
         // ==========================================
-        // 0. 玩家配置
+        // 0. 玩家配置 (Fallback 备用占位头像)
         // ==========================================
         const PLAYER_CONFIG = [
             "https://i.ibb.co/nMwf7NQf/2025-12-16-204010-951.jpg", 
@@ -806,149 +792,127 @@
         }
 
         const BACK_IMG_URL = "https://i.ibb.co/wr78p7jN/00-UNO.jpg";
-        const cardImages = {
-            "S1": "https://i.ibb.co/1GQzjd0m/S1-UNO-INFINITY.jpg", "S2": "https://i.ibb.co/21Dctr9r/S2-UNO-INFINITY.jpg", "S3": "https://i.ibb.co/YFhffzTX/S3-UNO-INFINITY-4.jpg", "S4": "https://i.ibb.co/7J1fZcxJ/S4-UNO-INFINITY-6.jpg", "S5": "https://i.ibb.co/dJ3G29jq/S5-UNO-INFINITY-2.jpg", "S6": "https://i.ibb.co/qMcFqNRf/S6-UNO-INFINITY-4.jpg", "S7": "https://i.ibb.co/ymtMMQCh/S7-UNO-INFINITY.jpg", "S8": "https://i.ibb.co/JjNBPwFQ/S8-UNO-INFINITY.jpg", "S9": "https://i.ibb.co/XZZdJPVZ/S9-UNO-INFINITY-1-2.jpg", "S10": "https://i.ibb.co/dsj5v1dQ/S10-UNO-INFINITY.jpg", "S11": "https://i.ibb.co/RT46qkw7/S11-UNO-INFINITY.jpg", "S12": "https://i.ibb.co/9HxR16Sb/S12-UNO-INFINITY-1.jpg", "S13": "https://i.ibb.co/Jw2v4Xgc/S13-UNO-INFINITY.jpg", "S14": "https://i.ibb.co/PZ38qxFX/S14-UNO-INFINITY.jpg", "S15": "https://i.ibb.co/S451Rvc0/S15-UNO.jpg", "S16": "https://i.ibb.co/yc2R9gY4/S16-UNO-2-1.jpg", "S17": "https://i.ibb.co/VcKJ0vNQ/S17-UNO-2.jpg", "S18": "https://i.ibb.co/Q3TSxHDf/S18-UNO.jpg", "S19": "https://i.ibb.co/zV1QXR1Y/S19-UNO-10.jpg", "S20": "https://i.ibb.co/v2r3p2Z/S20-UNO.jpg", "S21": "https://i.ibb.co/8LJNn1HT/S21-UNO.jpg", "S22": "https://i.ibb.co/xqpX1NF8/S22-UNO.jpg", "S23": "https://i.ibb.co/v6XGJbDW/S23-UNO.jpg", "S24": "https://i.ibb.co/FbDqds6v/S24-UNO.jpg", "S25": "https://i.ibb.co/qM1GhpSb/S25-UNO.jpg", "S26": "https://i.ibb.co/HpfqszCx/S26-UNO.jpg", "S27": "https://i.ibb.co/dw2GkPmN/S27-UNO.jpg", "S28": "https://i.ibb.co/TDbFfkKV/S28-UNO.jpg", "S29": "https://i.ibb.co/q3ck93nD/S29-UNO.jpg",
-            "A1": "https://i.ibb.co/hF9PXdKF/A1.jpg", "A2": "https://i.ibb.co/NgzPqmpc/A2.jpg", "A3": "https://i.ibb.co/DgkGjj8y/A3.jpg", "A4": "https://i.ibb.co/xSjKPrnP/A4.jpg", "A5": "https://i.ibb.co/ksZCgsCc/A5.jpg", "A6": "https://i.ibb.co/RpLb825p/A6.jpg", "A7": "https://i.ibb.co/6cWb3tzG/A7.jpg", "A8": "https://i.ibb.co/bMmhKFdn/A8.jpg", "A9": "https://i.ibb.co/4gJHxNcK/A9.jpg",
-            "W1": "https://i.ibb.co/YBzGSzXS/W1-UNO-INFINITY.jpg", "W2": "https://i.ibb.co/B2cc7zrt/W2-UNO-INFINITY.jpg", "W3": "https://i.ibb.co/RThZ4b0Q/W3-UNO-INFINITY-2.jpg", "W4": "https://i.ibb.co/SwVbpNKz/W4-UNO-INFINITY-2.jpg", "W5": "https://i.ibb.co/5hCgrZYk/W5-UNO-INFINITY-ALL.jpg", "W6": "https://i.ibb.co/PvQkHhkX/W6-UNO-INFINITY-OUT.jpg", "W7": "https://i.ibb.co/cSKFF1sC/W7-UNO-INFINITY-1up.jpg", "W8": "https://i.ibb.co/Rkvv8thT/W8-UNO-INFINITY.jpg", "W9": "https://i.ibb.co/NgTCcsBm/W9-UNO-INFINITY-4.jpg", "W10": "https://i.ibb.co/0j4kP2h9/W10-UNO-INFINITY-4.jpg", "W11": "https://i.ibb.co/hRtL4YjW/W11-UNO-INFINITY.jpg",
-            "E1": "https://i.ibb.co/KxMbx0MD/E1-UNO-INFINITY.jpg", "E2": "https://i.ibb.co/Xk5Vfd59/E2-UNO-INFINITY.jpg", "E3": "https://i.ibb.co/8gtXYrvP/E3-UNO-INFINITY.jpg", "E4": "https://i.ibb.co/h1tmjTNG/E4-UNO-INFINITY.jpg", "E5": "https://i.ibb.co/WpYdq670/E5-UNO-INFINITY.jpg", "E6": "https://i.ibb.co/5hgX8SbX/E6-UNO-INFINITY.jpg", "E7": "https://i.ibb.co/gbR7N94j/E7-UNO-INFINITY.jpg", "E8": "https://i.ibb.co/Pv9bKWTz/E8-UNO-INFINITY.jpg", "E9": "https://i.ibb.co/bMx87dnL/E9-UNO-INFINITY-EXTRA-5.jpg", "E10": "https://i.ibb.co/tWvVm7f/E10-UNO-INFINITY-EXTRA-5.jpg", "E11": "https://i.ibb.co/wNVVsk8D/E11-UNO-INFINITY-0.jpg", "E12": "https://i.ibb.co/gZc7mbcW/E12-UNO-INFINITY-7.jpg", "E13": "https://i.ibb.co/SwMzwvpJ/E13-UNO-INFINITY.jpg", "E14": "https://i.ibb.co/Lh5k9c62/E14-UNO-INFINITY.jpg", "E15": "https://i.ibb.co/0y33f7QK/E15-UNO-INFINITY.jpg", "E16": "https://i.ibb.co/0yYZQbrb/E16-UNO-v2.jpg", "E17": "https://i.ibb.co/YB87Fw4B/E17-UNO.jpg", "E18": "https://i.ibb.co/3YpgJdfD/E18-UNO.jpg", "E19": "https://i.ibb.co/tpXzsxvd/E19-UNO-5.jpg", "E20": "https://i.ibb.co/nNTVKGn2/E20-UNO-5.jpg",
-            "F1": "https://i.ibb.co/931ffBtx/F1-UNO-INFINITY.jpg", "F2": "https://i.ibb.co/NgKD2Kn4/F2-UNO-INFINITY.jpg", "F3": "https://i.ibb.co/wNcKhXCJ/F3-UNO-INFINITY.jpg", "F4": "https://i.ibb.co/DsRGcVR/F4-UNO-INFINITY-2.jpg", "F5": "https://i.ibb.co/gbCwWF4T/F5-UNO-INFINITY-05-1.jpg", "F6": "https://i.ibb.co/bjZ0dtS6/F6-UNO-INFINITY-1.jpg", "F7": "https://i.ibb.co/ycZ7Yw7F/F7-UNO-INFINITY-v2.jpg", "F8": "https://i.ibb.co/Y4TcfZrL/F8-UNO-INFINITY-v2.jpg", "F9": "https://i.ibb.co/k2JQDBGF/F9-UNO-INFINITY.jpg", "F10": "https://i.ibb.co/NnKLbN7m/F10-UNO.jpg",
-            "G1": "https://i.ibb.co/0jXB6NkR/G1-UNO-INFINITY-03-8.jpg", "G2": "https://i.ibb.co/nsqsy0Cm/G2-UNO-INFINITY-04-10.jpg", "G3": "https://i.ibb.co/TDMJ8qXc/G3-UNO-INFINITY-8.jpg", "G4": "https://i.ibb.co/9HLXnrRG/G4-UNO-INFINITY-10.jpg", "G5": "https://i.ibb.co/S49f7Mvk/G5-UNO-INFINITY-4.jpg", "G6": "https://i.ibb.co/Kn3gXRH/G6-UNO-INFINITY-6.jpg", "G7": "https://i.ibb.co/9mTdRBPM/G7-UNO-INFINITY-8.jpg", "G8": "https://i.ibb.co/23Dw7SDB/G8-UNO-INFINITY-2.jpg", "G9": "https://i.ibb.co/XfJWc3Dr/G9-UNO-INFINITY-2.jpg", "G10": "https://i.ibb.co/M5yGf3gw/G10-UNO-INFINITY-4.jpg", "G11": "https://i.ibb.co/qM8ttfZC/G11-UNO-INFINITY-4.jpg", "G12": "https://i.ibb.co/VWyjPDtv/G12-UNO-INFINITY.jpg", "G13": "https://i.ibb.co/BH9kHLzn/G13-UNO-INFINITY-20.jpg", "G14": "https://i.ibb.co/DPnjZY9c/G14-UNO-INFINITY-30.jpg", "G15": "https://i.ibb.co/5xR07yc7/G15-UNO-60-A.jpg", "G16": "https://i.ibb.co/KcnzqhtL/G16-UNO-60-B.jpg", "G17": "https://i.ibb.co/DPmFgt5P/G17-UNO-100-A.jpg", "G18": "https://i.ibb.co/cKdhfBF1/G18-UNO-100-B.jpg", "G19": "https://i.ibb.co/nsfg4SMq/G19-UNO-100-C.jpg", "G20": "https://i.ibb.co/WYmW5Dk/G20-UNO-INFINITY-20.jpg", "G21": "https://i.ibb.co/x8PyrBNH/G21-UNO-INFINITY-30.jpg", "G22": "https://i.ibb.co/mYqP9dQ/G22-UNO-INFINITY.jpg", "G23": "https://i.ibb.co/hPyx7Kf/G23-UNO-INFINITY-2.jpg", "G24": "https://i.ibb.co/MD2jzX8N/G24-UNO-INFINITY-4.jpg", "G25": "https://i.ibb.co/4gjbN8q1/G25-UNO-INFINITY.jpg", "G26": "https://i.ibb.co/MDkmqJHD/G26-UNO-INFINITY-V2.jpg", "G27": "https://i.ibb.co/fdyCZ7mL/G27-UNO-INFINITY.jpg",
-            "B1": "https://i.ibb.co/Df6JgnTQ/B1.jpg", "B2": "https://i.ibb.co/twtMVdjp/B2.jpg", "B3": "https://i.ibb.co/4nXX7dKs/B3.jpg", "B4": "https://i.ibb.co/Jjc72XPz/B4.jpg", "B5": "https://i.ibb.co/wN2RBTTL/B5.jpg", "B6": "https://i.ibb.co/hJZvLR8V/B6.jpg", "B7": "https://i.ibb.co/Mkj7rCT7/B7.jpg", "B8": "https://i.ibb.co/8nWvhKDh/B8.jpg", "B9": "https://i.ibb.co/mrR5Qch4/B9.jpg", "B10": "https://i.ibb.co/V0551g0c/B10.jpg", "B11": "https://i.ibb.co/BDbxxNt/B11.jpg", "B12": "https://i.ibb.co/fjxDRBp/B12.jpg", "B13": "https://i.ibb.co/dwh7HKqp/B13.jpg", "B14": "https://i.ibb.co/Y4FGsvSS/B14-UNO.jpg", "B15": "https://i.ibb.co/ccjnWMt2/B15-UNO-10.jpg", "B16": "https://i.ibb.co/xSBrNN42/B16-UNO-6.jpg", "B17": "https://i.ibb.co/xtWGcFLy/B17-UNO.jpg", "B18": "https://i.ibb.co/PZLHTVMQ/B18-UNO.jpg", "B19": "https://i.ibb.co/Lh9Jwh4C/B19-UNO.jpg", "B20": "https://i.ibb.co/BHRMrHRt/B20-UNO.jpg"
-        };
-
-        const DB = [
-             {id:"S1", type:"S", name:"黑牌可以最后出", desc:"•黑牌可最后一张打出"},
-            {id:"S2", type:"S", name:"万色数字", desc:"•数字牌无视颜色打出\n•接不同颜色的数字牌时，不改变轮次中的颜色。"},
-            {id:"S3", type:"S", name:"自动防御+4", desc:"•自动防御 ≤4 的罚牌\n•同类型牌 不能 叠加装备。\n•只能用3次"},
-            {id:"S4", type:"S", name:"自动防御+6", desc:"•自动防御 ≤6 的罚牌\n•同类型牌 不能 叠加装备。\n•只能用3次"},
-            {id:"S5", type:"S", name:"加牌额外+2", desc:"•每当打出加牌后，罚牌数量 再额外 +2。"},
-            {id:"S6", type:"S", name:"加牌额外+4", desc:"•每当打出加牌后，罚牌数量 再额外+4。"},
-            {id:"S7", type:"S", name:"数字额外得分", desc:"•每当打出数字牌，将这些牌搜集成牌堆\n•游戏结束，该牌堆分数为你的额外得分。"},
-            {id:"S8", type:"S", name:"功能牌额外得分", desc:"•每当打出功能牌，将这些牌搜集成牌堆\n•游戏结束，该牌堆分数为你的额外得分。"},
-            {id:"S9", type:"S", name:"上家摸罚牌的一半", desc:"•当被上一玩家罚牌\n上一玩家需摸取该罚牌一半的牌。\n•仅作用 单次罚牌"},
-            {id:"S10", type:"S", name:"摸取摸牌弃牌数的一半", desc:"•所有有摸牌弃牌要求的牌摸牌数减一半\n•向上取整"},
-            {id:"S11", type:"S", name:"万能钥匙", desc:"•锁可以随意打出"},
-            {id:"S12", type:"S", name:"卡槽+1", desc:"装备卡槽 +1\n•最多叠加至2个卡槽\n•卡槽永久归属该玩家"},
-            {id:"S13", type:"S", name:"损毁装备牌", desc:"•摧毁任意玩家的一张装备卡"},
-            {id:"S14", type:"S", name:"罚牌开根", desc:"•被罚牌，罚牌数量开根\n•例：被罚9张，只摸3张"},
-            {id:"S15", type:"S", name:"无法跳过", desc:"•不能被禁止跳过"},
-            {id:"S16", type:"S", name:"摸牌2选1", desc:"•摸牌时可摸两张，选一张加入手牌，弃一张"},
-            {id:"S17", type:"S", name:"盾牌×2", desc:"•打出一张盾牌，视为打出两张，以此类推"},
-            {id:"S18", type:"S", name:"锁住手牌", desc:"•手牌永不能被交换，轮换"},
-            {id:"S19", type:"S", name:"自动防御+10", desc:"•被罚≤10的加牌时，掷骰子\n•掷出3的倍数，视为打出金盾"},
-            {id:"S20", type:"S", name:"不参与接龙", desc:"•接龙开始局内，轮到你时，你掷30面骰子，掷出双数，则可以跳过自己的回合（一次）。"},
-            {id:"S21", type:"S", name:"拿取别人的装备卡", desc:"•拿去别人的装备卡装入自己的卡牌区"},
-            {id:"S22", type:"S", name:"不能打黑牌", desc:"•不能“主动”打出黑牌"},
-            {id:"S23", type:"S", name:"去色", desc:"•给其他玩家装备此牌，\n•则该玩家不能打出彩色数字牌。"},
-            {id:"S24", type:"S", name:"接龙", desc:"•可用接龙方式打数字牌。\n•例，别人打红1，你可以打蓝2，黄2，绿2。以此类推"},
-            {id:"S25", type:"S", name:"顺子", desc:"•打数字牌时可打顺子\n•例，你仅打出某颜色数字牌1，则可以将单张数字牌2, 3, 4, 5一起打出\n•大于等于3张才可出"},
-            {id:"S26", type:"S", name:"红黄铜色", desc:"•红色数字牌可以当黄色数字牌。\n•黄色数字牌可以当红色数字牌。\n•不改变轮次颜色"},
-            {id:"S27", type:"S", name:"蓝绿同色", desc:"•蓝色数字牌可以当绿色数字牌。\n•绿色数字牌可以当蓝色数字牌。\n•不改变轮次颜色"},
-            {id:"S28", type:"S", name:"同一数字全部打出", desc:"•当你可以打出某数字牌时，可将手牌中所有该数字的数字牌全部打完"},
-            {id:"S29", type:"S", name:"抢牌", desc:"•可跳过所有人的回合，打出与之前玩家一模一样的牌。"},
-            {id:"A1", type:"A", name:"数字0", desc:"•打出后，所有玩家按游玩顺序交换手牌\n•不能交换锁，钻石，装备"},
-            {id:"A2", type:"A", name:"数字7", desc:"•打出后，指定一名玩家交换手牌\n•不能交换锁，钻石，装备"},
-            {id:"A3", type:"A", name:"+2", desc:"•下家摸2张牌"},
-            {id:"A4", type:"A", name:"+4", desc:"•下家摸4张牌"},
-            {id:"A5", type:"A", name:"禁止", desc:"•跳过下家。"},
-            {id:"A6", type:"A", name:"同色全出", desc:"•同色的数字牌和功能牌可全部打出"},
-            {id:"A7", type:"A", name:"转向", desc:"•更换游戏方向"},
-            {id:"A8", type:"A", name:"井号", desc:"•可指定成任意数字打出"},
-            {id:"A9", type:"A", name:"黑色数字", desc:"•无色，只有接上数字时才能打出"},
-            {id:"W1", type:"W", name:"+?", desc:"•打出后，指定颜色，打出一张数字牌。\n•后面的玩家依次出数字牌，直到数字牌无法打出。\n•无法接数字牌的玩家，摸取之前所有数字牌的数字总和的牌。"},
-            {id:"W2", type:"W", name:"钻石", desc:"•游戏结束时，手牌留有此牌，则手牌罚分减100分。\n•手牌分数不够100分，出现负分情况，则直接计0分。\n•此牌不可轮换，交换，或被黑卡拿走。"},
-            {id:"W3", type:"W", name:"分数×2", desc:"•若作为最后一张手牌打出，所有玩家的罚分×2给胜利玩家\n•若游戏结束未被打出，则手牌罚分×2"},
-            {id:"W4", type:"W", name:"分数÷2", desc:"•若作为最后一张手牌打出，所有玩家的罚分÷2给胜利玩家\n•若游戏结束未被打出，则手牌罚分÷2"},
-            {id:"W5", type:"W", name:"ALL", desc:"•与OUT组合可以同时打出所有手牌。"},
-            {id:"W6", type:"W", name:"OUT", desc:"•与ALL组合可以同时打出所有手牌。"},
-            {id:"W7", type:"W", name:"复活", desc:"•被淘汰时，手牌有这张牌可以复活一次。"},
-            {id:"W8", type:"W", name:"安全出口", desc:"•指定6面骰一个点数\n•掷中该点数，则直接退出游戏，分数计1\n•游戏进入倒计时"},
-            {id:"W9", type:"W", name:"分数×4", desc:"•若作为最后一张手牌打出，所有玩家的罚分×4给胜利玩家\n•若游戏结束未被打出，则手牌罚分×4"},
-            {id:"W10", type:"W", name:"分数÷4", desc:"•若作为最后一张手牌打出，所有玩家的罚分÷4给胜利玩家\n•若游戏结束未被打出，则手牌罚分÷4"},
-            {id:"W11", type:"W", name:"万能白牌", desc:"•可当任意卡牌\n•不能当+1up，ALL，OUT"},
-            {id:"E1", type:"E", name:"礼物", desc:"•随意送2张牌送给任意1名或2名玩家"},
-            {id:"E2", type:"E", name:"查看并抽取", desc:"•查看1名玩家的手牌并随意抽取1张加入自己手牌"},
-            {id:"E3", type:"E", name:"回收", desc:"•可随意从弃牌堆里拿取一张手牌加入自己的手牌。\n•不能回收复活牌\n•不能回收白牌"},
-            {id:"E4", type:"E", name:"所有手牌换1张", desc:"•自己手牌<10时可用\n•自己所有手牌换取任一玩家的1张手牌"},
-            {id:"E5", type:"E", name:"下家丢黑牌", desc:"•下家丢掉所有黑牌\n•锁只能丢一张"},
-            {id:"E6", type:"E", name:"小丑", desc:"•可连带一张手牌一起出\n•如只剩两张牌时，无需喊UNO，到自己回合时，直接打出两张手牌，获胜。"},
-            {id:"E7", type:"E", name:"左轮", desc:"•指定点数，下家掷骰子。\n•掷出对应点数，直接淘汰\n未掷出\n1.下家丢弃对应点数数量的手牌\n2.自己摸取对应点数的牌。"},
-            {id:"E8", type:"E", name:"超级左轮", desc:"•打出此牌，指定单双。\n•下家掷30面骰子，掷中你所指定，则直接淘汰。\n•无论淘汰与否，下家摸取掷出点数对应数量的卡牌。"},
-            {id:"E9", type:"E", name:"生命→20", desc:"•淘汰张数降为20张"},
-            {id:"E10", type:"E", name:"生命→30", desc:"•淘汰张数升为30张"},
-            {id:"E11", type:"E", name:"超级轮换", desc:"•所有玩家，按游玩顺序轮换所有手牌+装备牌"},
-            {id:"E12", type:"E", name:"超级交换", desc:"•指定一名玩家，与其交换所有手牌+装备牌"},
-            {id:"E13", type:"E", name:"黄金钥匙", desc:"•解1把黄金锁\n•解2把普通锁"},
-            {id:"E14", type:"E", name:"黄金锁", desc:"•不能打出，轮换，交换。\n•可通过1把黄金钥匙或者2把普通钥匙解锁打出，也可通过礼物牌送给别人。"},
-            {id:"E15", type:"E", name:"超级万能", desc:"•可以当作任一普通黑牌，超级黑牌打出"},
-            {id:"E16", type:"E", name:"K.O", desc:"•掷30面骰子，掷出双数能使用\n•打出此牌后，暗扣一张牌。有玩家打出与你暗扣一模一样的牌，则其直接淘汰\n•被淘汰玩家的手牌分数为你额外得分\n•你被淘汰，此牌直接失效"},
-            {id:"E17", type:"E", name:"数字牌全出", desc:"•打出此牌，可将手牌中的所有数字牌全部打完"},
-            {id:"E18", type:"E", name:"立刻逃出", desc:""},
-            {id:"E19", type:"E", name:"生命+5", desc:"•生命值+5，一名玩家最多叠加两次。"},
-            {id:"E20", type:"E", name:"生命-5", desc:"•生命值-5，一名玩家最多叠加两次。"},
-            {id:"F1", type:"F", name:"黄金盾", desc:"•可防御任意加牌罚牌惩罚，将惩罚传递给下一玩家"},
-            {id:"F2", type:"F", name:"NO", desc:"•让除罚牌以外的效果失效"},
-            {id:"F3", type:"F", name:"反弹", desc:"•将任意效果反弹给上一家"},
-            {id:"F4", type:"F", name:"随机反弹", desc:"•将任意效果随机反弹给一名玩家"},
-            {id:"F5", type:"F", name:"剩1", desc:"•丢弃自己所有手牌，再摸取1张手牌。\n•不能丢锁，钻石"},
-            {id:"F6", type:"F", name:"黄金剩1", desc:"•丢弃自己所有手牌，再摸取1张手牌。\n•可以丢锁，钻石"},
-            {id:"F7", type:"F", name:"分发罚牌", desc:"•将累计罚牌平均分给各个玩家\n•细则见牌面"},
-            {id:"F8", type:"F", name:"分发罚牌", desc:"•将手牌平均分给各个玩家\n•细则见牌面"},
-            {id:"F9", type:"F", name:"金剑", desc:"可让罚牌直接失效"},
-            {id:"F10", type:"F", name:"复制", desc:"•打出此牌，视为和上一家打出一模一样的牌。"},
-            {id:"G1", type:"G", name:"++8", desc:"•下家摸8张牌。\n•不能被叠加"},
-            {id:"G2", type:"G", name:"++10", desc:"•下家摸10张牌。\n•不能被叠加"},
-            {id:"G3", type:"G", name:"转向，禁止++8", desc:"•上上家摸8张牌。\n•不能被叠加"},
-            {id:"G4", type:"G", name:"转向，禁止++10", desc:"•上上家摸10张牌。\n•不能被叠加"},
-            {id:"G5", type:"G", name:"全员+4", desc:"•全员（包括自己）摸4张牌"},
-            {id:"G6", type:"G", name:"全员+6", desc:"•全员（包括自己）摸6张牌"},
-            {id:"G7", type:"G", name:"全员+8", desc:"•全员（包括自己）摸8张牌"},
-            {id:"G8", type:"G", name:"全员×2", desc:"•全员（包括自己）手牌×2"},
-            {id:"G9", type:"G", name:"全员÷2", desc:"•全员（包括自己）手牌÷2"},
-            {id:"G10", type:"G", name:"全员÷4", desc:"•全员（包括自己）手牌÷4"},
-            {id:"G11", type:"G", name:"×4", desc:"•下家手牌×4\n•罚牌×4"},
-            {id:"G12", type:"G", name:"双骰子", desc:"•下家摸取两个骰子掷出的点数总和的牌。\n•此牌可以叠加双骰子牌，不可叠加单骰子牌。"},
-            {id:"G13", type:"G", name:"20面骰子", desc:"•下家掷20面骰子。\n•下家摸取点数数量的牌。"},
-            {id:"G14", type:"G", name:"30面骰子", desc:"•下家掷30面骰子。\n•下家摸取点数数量的牌。"},
-            {id:"G15", type:"G", name:"60面骰子-A", desc:"•与B面结合才可使用\n•下家掷60面骰子。\n•下家摸取点数数量的牌。"},
-            {id:"G16", type:"G", name:"60面骰子-B", desc:"•与A面结合才可使用\n•下家掷60面骰子。\n•下家摸取点数数量的牌。"},
-            {id:"G17", type:"G", name:"100面骰子-A", desc:"•与B,C面结合才可使用\n•下家掷100面骰子。\n•下家摸取点数数量的牌。"},
-            {id:"G18", type:"G", name:"100面骰子-B", desc:"•与A,C面结合才可使用\n•下家掷100面骰子。\n•下家摸取点数数量的牌。"},
-            {id:"G19", type:"G", name:"100面骰子-C", desc:"•与A,B面结合才可使用\n•下家掷100面骰子。\n•下家摸取点数数量的牌。"},
-            {id:"G20", type:"G", name:"暗黑20面骰子", desc:"•掷20面骰子\n•丢弃掷出点数对应的牌"},
-            {id:"G21", type:"G", name:"暗黑30面骰子", desc:"•掷30面骰子\n•丢弃掷出点数对应的牌"},
-            {id:"G22", type:"G", name:"掷硬币", desc:"•指定硬币的一面。\n•下家掷硬币，若未掷中，则摸8张牌。\n•若掷中，则丢弃8张牌，若手牌不够8张，（例，只有3张手牌，则需要丢弃手牌，再摸5张牌）"},
-            {id:"G23", type:"G", name:"手牌×2", desc:"•打出此牌，下家手牌×2\n•若你被罚牌，也可打出此牌，则罚牌数×2累积给下一家。"},
-            {id:"G24", type:"G", name:"手牌÷4", desc:"•打出此牌，手牌÷4\n•若你被罚牌，打出此牌，罚牌数÷4"},
-            {id:"G25", type:"G", name:"翻牌并摸牌", desc:"•翻开牌堆的牌\n•翻到数字牌，摸取对应数量的牌\n•没翻到数字牌，无事发生"},
-            {id:"G26", type:"G", name:"翻牌并摸牌v2", desc:"•翻开牌堆的牌直到翻到数字牌为止。\n•摸取对应数量的牌"},
-            {id:"G27", type:"G", name:"暗黑双骰子", desc:"•丢弃掷两个骰子对应点数数量的牌"},
-            {id:"B1", type:"B", name:"转向+4", desc:"•上一玩家摸取4张牌。"},
-            {id:"B2", type:"B", name:"+6", desc:"•下一玩家摸取6张牌。"},
-            {id:"B3", type:"B", name:"转向+8", desc:"•上一玩家摸取8张牌。"},
-            {id:"B4", type:"B", name:"+10", desc:"•下一玩家摸取10张牌。"},
-            {id:"B5", type:"B", name:"抽到指定颜色为止", desc:"•指定一个颜色，下位玩家 抽 到该颜色的牌为止。"},
-            {id:"B6", type:"B", name:"骰子", desc:"•下位玩家掷骰子。\n•摸骰子点数对应数量的牌\n•此牌可叠加骰子，双骰子"},
-            {id:"B7", type:"B", name:"盾牌", desc:"•可防御“黑牌”的罚牌，传递给下一玩家。"},
-            {id:"B8", type:"B", name:"÷2", desc:"•罚牌÷2\n•手牌÷2"},
-            {id:"B9", type:"B", name:"指定颜色打出所有数字牌", desc:"•指定一个颜色。\n•该颜色数字牌全部打出。"},
-            {id:"B10", type:"B", name:"送信", desc:"•可将任意一张牌送给其他玩家。"},
-            {id:"B11", type:"B", name:"锁", desc:"•不能打出，轮换，交换。\n•可通过1把黄金钥匙或者1把普通钥匙解锁打出，也可通过送信牌送给别人。"},
-            {id:"B12", type:"B", name:"钥匙", desc:"•可解锁“锁”。\n•可单独直接打出。"},
-            {id:"B13", type:"B", name:"禁两家", desc:"•跳过下两位玩家。"},
-            {id:"B14", type:"B", name:"所有玩家同色全给下一玩家", desc:"•指定一个颜色\n•所有玩家将手牌中该颜色的所有牌给下一玩家。"},
-            {id:"B15", type:"B", name:"随机+10", desc:"•随机让一名玩家+10\n•通过骰子决定"},
-            {id:"B16", type:"B", name:"随机+6", desc:"•随机让一名玩家+6\n•通过骰子决定"},
-            {id:"B17", type:"B", name:"所有人抽上一玩家一张牌", desc:"•所有玩家，抽取上一玩家一张牌"},
-            {id:"B18", type:"B", name:"指定同色给下一玩家", desc:"•将手牌中所有同一颜色的牌给下一玩家"},
-            {id:"B19", type:"B", name:"万能牌", desc:"•可当任一普通黑牌"},
-            {id:"B20", type:"B", name:"暗黑骰子", desc:"•丢弃掷骰子对应点数数量的牌"}
+        
+        // ==========================================
+        // 极致纯 URL 加载系统（完全解除内置带编号 ID 限制）
+        // ==========================================
+        const defaultCardUrls = [
+            "https://i.ibb.co/gZNn0zXZ/A-0-chain.jpg",
+            "https://i.ibb.co/gFwTJpWG/A-1-Reverse-4.jpg",
+            "https://i.ibb.co/ch29C7Jj/A-2-6.jpg",
+            "https://i.ibb.co/yc4Yh07j/A-3-Reverse-8.jpg",
+            "https://i.ibb.co/gLznzTkM/A-4-10.jpg",
+            "https://i.ibb.co/dJLbjhtp/A-5-Random-6.jpg",
+            "https://i.ibb.co/5gvCn23t/A-6-Random-10.jpg",
+            "https://i.ibb.co/b5rNhwjq/AS-1-8.jpg",
+            "https://i.ibb.co/Z1Sb9Vn2/AS-2-10.jpg",
+            "https://i.ibb.co/gbYm2Dzh/AS-3-Reverse-Skip-8.jpg",
+            "https://i.ibb.co/27czG6SN/AS-4-Reverse-Skip-10.jpg",
+            "https://i.ibb.co/sv8X2n9z/AS-5-Random-8.jpg",
+            "https://i.ibb.co/Q3VcnwCP/AS-6-Random-10.jpg",
+            "https://i.ibb.co/848pWCrf/B-1-2.jpg",
+            "https://i.ibb.co/dwvXDy7K/B-2-2-re.jpg",
+            "https://i.ibb.co/s9fGjj8H/B-3-4-RE.jpg",
+            "https://i.ibb.co/kg9qryMG/B-4-4.jpg",
+            "https://i.ibb.co/Y7qtHgtF/B-5-8.jpg",
+            "https://i.ibb.co/XxjcyGkW/B-6-8.jpg",
+            "https://i.ibb.co/4zQfrVK/B-7-10.jpg",
+            "https://i.ibb.co/KcR8vLXD/B-8-10.jpg",
+            "https://i.ibb.co/39Qqf47K/C-1-Draw-Target-Color.jpg",
+            "https://i.ibb.co/1Y7MPmFB/C-2-Draw-Penalty-Cards-Matching-the-Number.jpg",
+            "https://i.ibb.co/jP4sMpHX/C-3-Gun.jpg",
+            "https://i.ibb.co/5xJbCYw8/C-4-Super-Gun.jpg",
+            "https://i.ibb.co/rKcdJhSd/C-5-Coin.jpg",
+            "https://i.ibb.co/4ZV3QsZT/D-1-DICE.jpg",
+            "https://i.ibb.co/PsTyF54k/D-2-DICE-DOUBLE.jpg",
+            "https://i.ibb.co/mY42pk7/D-3-DICE-20.jpg",
+            "https://i.ibb.co/tp2NV3Cd/D-4-DICE-30.jpg",
+            "https://i.ibb.co/Z1wvTC7W/D-5-DICE-60-A.jpg",
+            "https://i.ibb.co/1t8ms8MX/D-5-DICE-60-B.jpg",
+            "https://i.ibb.co/LhsYH4fN/D-6-DICE-100-A.jpg",
+            "https://i.ibb.co/FqBM1ppq/D-6-DICE-100-B.jpg",
+            "https://i.ibb.co/yBhKMzWw/D-6-DICE-100-C.jpg",
+            "https://i.ibb.co/ks1ydFSz/DC-1-Dark-DICE.jpg",
+            "https://i.ibb.co/fV8NDMhb/DC-2-Dark-DICE-DOUBLE.jpg",
+            "https://i.ibb.co/HfynyTSz/DC-3-Dark-DICE-20.jpg",
+            "https://i.ibb.co/Fv9GRSH/DC-4-Dark-DICE-30.jpg",
+            "https://i.ibb.co/Qj7rJxqt/DC-5-lucky-DICE-20.jpg",
+            "https://i.ibb.co/dstBpjrn/DC-6-lucky-DICE-30.jpg",
+            "https://i.ibb.co/8DMz6Gv8/DC-7-lucky-DICE-60.jpg",
+            "https://i.ibb.co/gbFftdtM/DC-8-lucky-DICE-100.jpg",
+            "https://i.ibb.co/s9V13vYt/E-1-ALL-4.jpg",
+            "https://i.ibb.co/TMkDyCbd/E-2-ALL-6.jpg",
+            "https://i.ibb.co/vCJTP0pN/E-3-ALL-8.jpg",
+            "https://i.ibb.co/Ldrf8gS1/E-4-ALL-10.jpg",
+            "https://i.ibb.co/hRdrBGrK/EB-1-ALL-2.jpg",
+            "https://i.ibb.co/vC2GfKtz/EB-2-ALL-2.jpg",
+            "https://i.ibb.co/zH8cv8DP/EB-3-ALL-4.jpg",
+            "https://i.ibb.co/vCRfBRTD/EB-4-ALL-8.jpg",
+            "https://i.ibb.co/Mx6TqqsY/F-1-Shield.jpg",
+            "https://i.ibb.co/Q15C3nB/F-2-Break-Shield.jpg",
+            "https://i.ibb.co/p6086mRq/F-3-Gold-Shield.jpg",
+            "https://i.ibb.co/vCKz7Zhv/F-4-Break-Gold-Shield.jpg",
+            "https://i.ibb.co/kVsYDmCV/F-5-Gold-Swords.jpg",
+            "https://i.ibb.co/xqWgMYW4/F-6-NO.jpg",
+            "https://i.ibb.co/TDgQPWns/F-7-Reflect.jpg",
+            "https://i.ibb.co/vCWS9RTv/F-8-Random.jpg",
+            "https://i.ibb.co/2fSkVDT/G-0-JOKER.jpg",
+            "https://i.ibb.co/whJs0X6N/G-1-Lastcard.jpg",
+            "https://i.ibb.co/765pqD7/G-10-Cycle.jpg",
+            "https://i.ibb.co/1fb0YFVt/G-11-Discard-Target-Color.jpg",
+            "https://i.ibb.co/tptqTdng/G-2-Super-Lastcard.jpg",
+            "https://i.ibb.co/zhxnTtvW/G-3-All-For-One.jpg",
+            "https://i.ibb.co/dJj4fxSf/G-4-Discard-All-Nummbers.jpg",
+            "https://i.ibb.co/MDqHwdr8/G-5-Discard-All-Blacks.jpg",
+            "https://i.ibb.co/ZRxSnhRT/G-6-Deal-Hands.jpg",
+            "https://i.ibb.co/cHYrw2k/G-7-Deal-Penalties.jpg",
+            "https://i.ibb.co/kVY7PyM8/G-8-Exchange.jpg",
+            "https://i.ibb.co/5W6x9fvr/G-9-Swap.jpg",
+            "https://i.ibb.co/53HPBk8/H-10-30-S.jpg",
+            "https://i.ibb.co/rGx5TF75/H-2-DOUBLE-SKIP.jpg",
+            "https://i.ibb.co/RpJcFGcp/H-3-Letter.jpg",
+            "https://i.ibb.co/pj4CkrVZ/H-4-Gift.jpg",
+            "https://i.ibb.co/hJDKwRT9/H-5-Steal-Card-re.jpg",
+            "https://i.ibb.co/8DgmDSh0/H-6-Recycle.jpg",
+            "https://i.ibb.co/jPCx4Xrv/H-7-HP-5.jpg",
+            "https://i.ibb.co/8DgpQ77M/H-8-HP-5.jpg",
+            "https://i.ibb.co/qFWGT8YM/H-9-30-S-re.jpg",
+            "https://i.ibb.co/TMqWLhyM/L-1-Key.jpg",
+            "https://i.ibb.co/R4VzjgqY/L-2-Lock.jpg",
+            "https://i.ibb.co/qGHtkzv/L-3-Gold-Key.jpg",
+            "https://i.ibb.co/27NQP4HC/L-4-Gold-Lock.jpg",
+            "https://i.ibb.co/d0yP9pcH/P-1-Diamond.jpg",
+            "https://i.ibb.co/1jvwzJy/P-2-Double-Diamonds.jpg",
+            "https://i.ibb.co/RT0s1tXb/P-3-Triple-Diamonds.jpg",
+            "https://i.ibb.co/gFZ7yJBx/P-4-4-Diamonds.jpg",
+            "https://i.ibb.co/Fk5k4kYd/X-1-SCORE-2.jpg",
+            "https://i.ibb.co/PG37GX8h/X-2-SCORE-2.jpg",
+            "https://i.ibb.co/VYXZm70N/X-3-SCORE-3.jpg",
+            "https://i.ibb.co/1tdF5Ccm/X-4-SCORE-3.jpg",
+            "https://i.ibb.co/dSMVfxW/X-5-SCORE-4.jpg",
+            "https://i.ibb.co/gL9xc2PZ/X-6-SCORE-4.jpg",
+            "https://i.ibb.co/4ZrvnwSp/Y-0-Curse.jpg",
+            "https://i.ibb.co/jPK8WSNN/Y-1-Reborn.jpg",
+            "https://i.ibb.co/35dQFgpt/Y-2-Poison.jpg",
+            "https://i.ibb.co/pjqgDRgP/Y-3-ALL.jpg",
+            "https://i.ibb.co/XfS8qYNS/Y-4-OUT.jpg",
+            "https://i.ibb.co/931hv3Zv/Y-5-EXIT.jpg",
+            "https://i.ibb.co/nNzSbDh4/Y-6-Count-Down.jpg",
+            "https://i.ibb.co/k6qsh1d6/Z-1-Copy.jpg",
+            "https://i.ibb.co/YBhVmq49/Z-2-Wildcard.jpg",
+            "https://i.ibb.co/5xFGd11r/Z-3-Super-Wildcard.jpg",
+            "https://i.ibb.co/HDBd3X3H/Z-4-Ultra-Wildcard.jpg"
         ];
 
-        const TYPE_COLORS_CSS = {
-            'S': '#f4b042', 'A': '#8ecae6', 'B': '#e65b65',
-            'E': '#85c441', 'F': '#8e7cc3', 'G': '#4a86e8', 'W': '#ffffff'
-        };
+        let cardUrls = [...defaultCardUrls];
+        const savedUrls = localStorage.getItem('uno_custom_card_urls_list');
+        if (savedUrls) {
+            try {
+                cardUrls = JSON.parse(savedUrls);
+            } catch(e) {
+                console.error("Failed to load customized URL list", e);
+            }
+        }
 
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x050510, 0.001);
@@ -1006,8 +970,29 @@
         createStarLayers();
 
         const loader = new THREE.TextureLoader();
+        
+        const textureCache = new Map();
+        const materialCache = new Map();
+
+        function getCardMaterials(frontTex, backTex) {
+            const key = `${frontTex ? frontTex.uuid : 'none'}_${backTex ? backTex.uuid : 'none'}`;
+            if (materialCache.has(key)) {
+                return materialCache.get(key);
+            }
+            const matSide = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4 });
+            const matFront = frontTex ? new THREE.MeshStandardMaterial({ map: frontTex, roughness: 0.3, metalness: 0.0 }) : new THREE.MeshStandardMaterial({ color: 0xff0000 });
+            const matBack = backTex ? new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.3, metalness: 0.0 }) : new THREE.MeshStandardMaterial({ color: 0x000000 });
+            const materials = [matSide, matSide, matSide, matSide, matFront, matBack];
+            materialCache.set(key, materials);
+            return materials;
+        }
+
         let backTexture = null;
-        loader.load(BACK_IMG_URL, (tex) => { tex.colorSpace = THREE.SRGBColorSpace; backTexture = tex; }, undefined, () => {});
+        loader.load(BACK_IMG_URL, (tex) => { 
+            tex.colorSpace = THREE.SRGBColorSpace; 
+            backTexture = tex; 
+            textureCache.set(BACK_IMG_URL, tex);
+        }, undefined, () => {});
         
         const cardGeometry = new RoundedBoxGeometry(10, 15, 0.1, 4, 0.2);
         
@@ -1025,7 +1010,6 @@
         let speedMultiplier = 1.0; 
         let isInteractionEnabled = false;
         
-        // 新增控制变量
         let avatarSpeedMultiplier = 1.0;
         let baseCameraDistance = 140; 
         let isPlayerAvatarsVisible = true;
@@ -1033,26 +1017,23 @@
         let forceLoadTimer = null;
         let loadedCount = 0;
 
-        // 全局设置
         let avatarSizeScale = 1.0;
         let avatarOrbitRadius = 45;
         let cardSizeScale = 1.0; 
         let cardOrbitRadiusScale = 110; 
         let isCardVisible = true; 
         
-        // --- 优化：光条系统开关和参数 ---
-        let isTrailsEnabled = false; // 默认关闭
+        let isTrailsEnabled = false; 
         let trailLengthMax = 60;
         let trailWidthScale = 1.0;
 
-        // UI Event Listeners
         document.getElementById('slider-avatar-speed').addEventListener('input', (e) => { avatarSpeedMultiplier = parseFloat(e.target.value); });
         document.getElementById('slider-camera-distance').addEventListener('input', (e) => { camera.position.z = parseFloat(e.target.value); controls.update(); });
         document.getElementById('btn-reset-camera').addEventListener('click', () => { camera.position.set(0, 40, baseCameraDistance); controls.reset(); document.getElementById('slider-camera-distance').value = baseCameraDistance; });
         
         document.getElementById('slider-avatar-size').addEventListener('input', (e) => {
             avatarSizeScale = parseFloat(e.target.value);
-            playerMeshes.forEach(m => { if(playersData[m.userData.id].active) m.scale.setScalar(avatarSizeScale); });
+            playerMeshes.forEach(m => { if(playersData.find(p => p.id === m.userData.id)?.active) m.scale.setScalar(avatarSizeScale); });
         });
         document.getElementById('slider-avatar-radius').addEventListener('input', (e) => { avatarOrbitRadius = parseFloat(e.target.value); });
         
@@ -1074,14 +1055,12 @@
             if(currentLayout === 'galaxy') arrangeGalaxySphere();
         });
         
-        // --- 优化：光条UI逻辑 ---
         document.getElementById('btn-toggle-trails').addEventListener('click', (e) => {
             isTrailsEnabled = !isTrailsEnabled; 
             trailGroup.visible = isPlayerAvatarsVisible && isTrailsEnabled;
             e.target.innerText = isTrailsEnabled ? "TRAILS: ON" : "TRAILS: OFF"; 
             e.target.classList.toggle('active');
             
-            // 切换光条后，清空历史数据防止跳变
             playerMeshes.forEach(m => {
                 if(m.userData.trail) m.userData.trail.clear();
             });
@@ -1089,18 +1068,15 @@
         document.getElementById('slider-trail-length').addEventListener('input', (e) => { trailLengthMax = parseInt(e.target.value); });
         document.getElementById('slider-trail-width').addEventListener('input', (e) => { trailWidthScale = parseFloat(e.target.value); });
 
-        function createAndAddCard(frontTex, cardData, targetCount) {
-             const matSide = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4 });
+        function createAndAddCard(frontTex, url, targetCount) {
              const fTex = frontTex ? frontTex : (backTexture ? backTexture : null);
              const bTex = backTexture ? backTexture : fTex;
-             const matFront = fTex ? new THREE.MeshStandardMaterial({ map: fTex, roughness: 0.3, metalness: 0.0 }) : new THREE.MeshStandardMaterial({ color: 0xff0000 });
-             const matBack = bTex ? new THREE.MeshStandardMaterial({ map: bTex, roughness: 0.3, metalness: 0.0 }) : new THREE.MeshStandardMaterial({ color: 0x000000 });
-             const materials = [matSide, matSide, matSide, matSide, matFront, matBack];
+             const materials = getCardMaterials(fTex, bTex);
              const mesh = new THREE.Mesh(cardGeometry, materials);
              
              const radius = 60 + Math.random() * 50; const theta = Math.random() * Math.PI * 2; const phi = Math.acos(2 * Math.random() - 1);
              mesh.userData = {
-                 id: cardData.id, name: cardData.name, type: cardData.type, desc: cardData.desc,
+                 url: url,
                  orbitRadius: radius, orbitTheta: theta, orbitPhi: phi,
                  orbitSpeed: (0.0003 + Math.random() * 0.001) * (Math.random()>0.5?1:-1),
                  rotationSpeed: new THREE.Vector3(Math.random()*0.01, Math.random()*0.01, 0),
@@ -1122,24 +1098,35 @@
         }
 
         window.initCards = function(multiplier) {
-            cardMeshes.forEach(m => { cardGroup.remove(m); if(Array.isArray(m.material)) m.material.forEach(mat => mat.dispose()); else m.material.dispose(); });
+            cardMeshes.forEach(m => { cardGroup.remove(m); }); 
             cardMeshes = []; currentMultiplier = multiplier; loadedCount = 0;
-            document.querySelectorAll('.ctrl-group .ctrl-btn').forEach(btn => { if(btn.onclick && btn.innerText.includes('x')) btn.classList.toggle('active', btn.innerText === `x${multiplier}`); });
-            let cardsToLoad = []; const baseCards = DB.filter(c => cardImages[c.id]); for(let i=0; i<multiplier; i++) cardsToLoad = cardsToLoad.concat(baseCards);
+            
+            let cardsToLoad = []; 
+            for (let i = 0; i < multiplier; i++) {
+                cardsToLoad = cardsToLoad.concat(cardUrls);
+            }
+
             const loaderDiv = document.getElementById('loader'); loaderDiv.style.opacity = 1; loaderDiv.style.display = 'flex';
             document.getElementById('loader-text').innerText = "LOADING RESOURCES (" + cardsToLoad.length + ")";
             if(forceLoadTimer) clearTimeout(forceLoadTimer);
-            forceLoadTimer = setTimeout(() => { console.warn("Loading timed out."); loaderDiv.style.opacity = 0; setTimeout(()=> loaderDiv.style.display = 'none', 800); }, 8000);
-            cardsToLoad.forEach((cardData, idx) => {
-                const url = cardImages[cardData.id] || BACK_IMG_URL;
-                loader.load(url, (frontTex) => { frontTex.colorSpace = THREE.SRGBColorSpace; createAndAddCard(frontTex, cardData, cardsToLoad.length); }, undefined, (err) => { createAndAddCard(null, cardData, cardsToLoad.length); });
+            forceLoadTimer = setTimeout(() => { console.warn("Loading timed out."); loaderDiv.style.opacity = 0; setTimeout(()=> loaderDiv.style.display = 'none', 800); }, 15000);
+            
+            cardsToLoad.forEach((url) => {
+                if (textureCache.has(url)) {
+                    createAndAddCard(textureCache.get(url), url, cardsToLoad.length);
+                } else {
+                    loader.load(url, (frontTex) => {
+                        frontTex.colorSpace = THREE.SRGBColorSpace;
+                        textureCache.set(url, frontTex);
+                        createAndAddCard(frontTex, url, cardsToLoad.length);
+                    }, undefined, (err) => {
+                        createAndAddCard(null, url, cardsToLoad.length);
+                    });
+                }
             });
         };
         window.setMultiplier = function(m) { if(m === currentMultiplier) return; initCards(m); };
 
-        // ==========================================
-        // 优化：RibbonTrail (光带系统)
-        // ==========================================
         class RibbonTrail {
             constructor(parentGroup, color = new THREE.Color(0xffffff)) {
                 this.points = [];
@@ -1147,7 +1134,7 @@
                 this.color = color.clone();
                 
                 const geometry = new THREE.BufferGeometry();
-                const pos = new Float32Array(this.maxBuffer * 2 * 3); // 2 verts per segment
+                const pos = new Float32Array(this.maxBuffer * 2 * 3); 
                 const alpha = new Float32Array(this.maxBuffer * 2);
                 
                 geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -1173,16 +1160,16 @@
                         }
                     `,
                     transparent: true,
-                    depthWrite: false, // Important for additive blending look
+                    depthWrite: false, 
                     depthTest: true,
                     side: THREE.DoubleSide,
-                    blending: THREE.AdditiveBlending // Glow effect
+                    blending: THREE.AdditiveBlending 
                 });
 
                 this.mesh = new THREE.Mesh(geometry, material);
                 this.mesh.drawMode = THREE.TriangleStripDrawMode;
                 this.mesh.frustumCulled = false;
-                this.mesh.renderOrder = 0; // Behind avatars
+                this.mesh.renderOrder = 0; 
                 parentGroup.add(this.mesh);
             }
 
@@ -1199,7 +1186,6 @@
                 }
                 this.mesh.visible = true;
 
-                // Color varies with time
                 this.updateTrailColor();
 
                 this.points.push(targetPosition.clone());
@@ -1224,13 +1210,11 @@
                         dir.subVectors(p, this.points[i-1]).normalize();
                     }
 
-                    // Billboard tech
                     const viewDir = new THREE.Vector3().subVectors(p, eye).normalize();
                     const right = new THREE.Vector3().crossVectors(dir, viewDir).normalize();
 
-                    // Tapering: Thick at head (index count-1), thin at tail (index 0)
-                    const ratio = i / (count - 1); // 0 to 1
-                    const currentWidth = trailWidthScale * (0.2 + ratio * 1.8); // Min width 0.2
+                    const ratio = i / (count - 1); 
+                    const currentWidth = trailWidthScale * (0.2 + ratio * 1.8); 
 
                     const pL = p.clone().addScaledVector(right, currentWidth);
                     const pR = p.clone().addScaledVector(right, -currentWidth);
@@ -1239,8 +1223,7 @@
                     positions[idx] = pL.x; positions[idx+1] = pL.y; positions[idx+2] = pL.z;
                     positions[idx+3] = pR.x; positions[idx+4] = pR.y; positions[idx+5] = pR.z;
 
-                    // Alpha fade
-                    alphas[i*2] = ratio * 0.8; // Max opacity 0.8
+                    alphas[i*2] = ratio * 0.8; 
                     alphas[i*2+1] = ratio * 0.8;
                 }
 
@@ -1269,6 +1252,272 @@
             }
         }
 
+        // ==========================================
+        // MQTT 组网高频轮询同步对账引擎 (毫秒级无漏失同步)
+        // ==========================================
+        function initMQTT() {
+            if (typeof window.mqtt === 'undefined') {
+                console.warn("MQTT library not loaded yet, retrying...");
+                setTimeout(initMQTT, 500);
+                return;
+            }
+            if (mqttClient && mqttClient.connected) {
+                console.log("MQTT client is already connected.");
+                return;
+            }
+            console.log('Connecting to MQTT broker for room:', roomCode);
+            mqttClient = window.mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+                keepalive: 60,
+                reconnectPeriod: 1000, 
+                connectTimeout: 30 * 1000,
+                clean: true
+            });
+            
+            mqttClient.on('connect', () => {
+                console.log('Connected to MQTT broker in html2!');
+                mqttClient.subscribe(`uno_room_${roomCode}`);
+                // 首次连接即刻发起一次全量校准请求
+                mqttClient.publish(`uno_room_${roomCode}`, JSON.stringify({ action: 'REQ_FULL_SYNC' }));
+            });
+            
+            mqttClient.on('reconnect', () => {
+                console.log('MQTT reconnecting...');
+            });
+            mqttClient.on('close', () => {
+                console.log('MQTT connection closed.');
+            });
+            mqttClient.on('offline', () => {
+                console.log('MQTT went offline.');
+            });
+
+            mqttClient.on('message', (topic, message) => {
+                if (topic !== `uno_room_${roomCode}`) return;
+                try {
+                    const payload = JSON.parse(message.toString());
+                    handleSyncedMessage(payload);
+                } catch(e) {
+                    console.error("Failed to parse MQTT message:", e);
+                }
+            });
+
+            // ⚡ 主动脉增量轮询：每秒高频对账同步 ⚡
+            // 解决主机在暂停、倒计时增加/减少、复位时，由于不主动发广播导致的信息不一致问题。
+            setInterval(() => {
+                if (mqttClient && mqttClient.connected) {
+                    mqttClient.publish(`uno_room_${roomCode}`, JSON.stringify({ action: 'REQ_FULL_SYNC' }));
+                }
+            }, 1000);
+        }
+
+        function handleSyncedMessage(payload) {
+            if (payload.action === 'FULL_SYNC_DATA') {
+                if (payload.gameData && payload.gameData.players) {
+                    // 只显示通过玩家管理被激活的在线活跃玩家，过滤掉“休息中”的玩家
+                    const activePlayers = payload.gameData.players.filter(p => p.isActive);
+                    const activeIdsStr = activePlayers.map(p => p.id).join(",");
+                    
+                    if (activeIdsStr !== lastSyncedActivePlayerIds) {
+                        lastSyncedActivePlayerIds = activeIdsStr;
+                        rebuildPlayers3D(activePlayers);
+                    }
+                }
+                
+                if (payload.v2State) {
+                    v2State = payload.v2State;
+                    applyAllSyncedPlayerStates();
+                }
+                
+                if (payload.timerRemain !== undefined) {
+                    timerRemaining = payload.timerRemain;
+                    updateTimerDisplay();
+                }
+                if (payload.isTimerRunning !== undefined) {
+                    isTimerRunning = payload.isTimerRunning;
+                    const btnStart = document.getElementById('t-start');
+                    const btnPause = document.getElementById('t-pause');
+                    if (isTimerRunning) {
+                        btnStart.classList.add('active');
+                        btnPause.classList.remove('active');
+                    } else {
+                        btnStart.classList.remove('active');
+                        btnPause.classList.add('active');
+                    }
+                }
+            }
+            
+            if (payload.action === 'SYNC_V2_STATE') {
+                if (payload.v2State) {
+                    v2State = payload.v2State;
+                    applyAllSyncedPlayerStates();
+                }
+            }
+            
+            if (payload.action === 'TIME_SYNC') {
+                if (payload.timerRemain !== undefined) {
+                    timerRemaining = payload.timerRemain;
+                    updateTimerDisplay();
+                }
+                if (payload.isTimerRunning !== undefined) {
+                    isTimerRunning = payload.isTimerRunning;
+                    const btnStart = document.getElementById('t-start');
+                    const btnPause = document.getElementById('t-pause');
+                    if (isTimerRunning) {
+                        btnStart.classList.add('active');
+                        btnPause.classList.remove('active');
+                    } else {
+                        btnStart.classList.remove('active');
+                        btnPause.classList.add('active');
+                    }
+                }
+            }
+
+            // 新局重置指令：立刻复位 3D 星空所有物理状态，进入崭新的一轮
+            if (payload.action === 'GAME_CALCULATED') {
+                console.log("Next round started. Resetting HTML2 visual states...");
+                resetAllStates();
+            }
+        }
+
+        function rebuildPlayers3D(activePlayers) {
+            console.log("Rebuilding 3D players based on active players:", activePlayers);
+            playerMeshes.forEach(m => { 
+                if(m.userData.trail) m.userData.trail.dispose();
+                playerGroup.remove(m); if(m.geometry) m.geometry.dispose(); if(m.material) m.material.dispose(); 
+            });
+            playerMeshes = []; playersData = []; 
+            const container = document.getElementById('player-list-container');
+            container.innerHTML = '';
+
+            activePlayers.forEach((p, i) => {
+                const btn = document.createElement('button'); btn.className = 'player-toggle-btn';
+                const img = document.createElement('img'); img.src = p.avatar; img.className = 'player-btn-img'; img.onerror = () => { img.src = PLACEHOLDER_AVATAR; };
+                const span = document.createElement('span'); span.className = 'player-btn-name'; span.innerText = p.name;
+                btn.appendChild(img); btn.appendChild(span); 
+                btn.onclick = (e) => { e.preventDefault(); }; 
+                container.appendChild(btn);
+                
+                playersData.push({ id: p.id, name: p.name, active: true, uiBtn: btn });
+
+                loader.load(p.avatar, (tex) => { 
+                    tex.colorSpace = THREE.SRGBColorSpace; 
+                    createPlayerMeshForSync(tex, p, i, activePlayers.length); 
+                }, undefined, () => {
+                    loader.load(PLACEHOLDER_AVATAR, (pt) => { 
+                        pt.colorSpace = THREE.SRGBColorSpace; 
+                        createPlayerMeshForSync(pt, p, i, activePlayers.length); 
+                    });
+                });
+            });
+        }
+
+        function createPlayerMeshForSync(tex, p, index, totalPlayers) {
+            const baseSize = 4;
+            const geom = new THREE.CircleGeometry(baseSize, 32);
+            const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: true });
+            const mesh = new THREE.Mesh(geom, mat);
+            
+            const borderCol = new THREE.Color(p.color || '#ff0000');
+            const ring = new THREE.Mesh(
+                new THREE.RingGeometry(baseSize, baseSize + 0.5, 32), 
+                new THREE.MeshBasicMaterial({ color: borderCol, side: THREE.DoubleSide, transparent: true, opacity: 0 })
+            );
+            mesh.add(ring);
+            
+            const phi = Math.acos( -1 + ( 2 * index ) / totalPlayers ); 
+            const theta = Math.sqrt( totalPlayers * Math.PI ) * phi;
+            mesh.position.setFromSphericalCoords(avatarOrbitRadius, phi, theta);
+            
+            const vel = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
+            const trail = new RibbonTrail(trailGroup, borderCol);
+
+            mesh.userData = { 
+                id: p.id, 
+                name: p.name,
+                velocity: vel, 
+                active: true, 
+                isPlayer: true, 
+                trail: trail, 
+                isFrozen: false, 
+                freezeRing: ring 
+            };
+            mesh.scale.setScalar(avatarSizeScale);
+            mesh.renderOrder = 999; 
+            
+            playerGroup.add(mesh); 
+            playerMeshes.push(mesh); 
+            playerMeshes.sort((a,b) => a.userData.id - b.userData.id);
+            
+            applySyncedPlayerState(p.id);
+        }
+
+        function applySyncedPlayerState(playerId) {
+            const mesh = playerMeshes.find(m => m.userData.id === playerId);
+            const pData = playersData.find(p => p.id === playerId);
+            if (!pData) return;
+            
+            const isEliminated = v2State && v2State.eliminated && v2State.eliminated[String(playerId)];
+            
+            if (isEliminated) {
+                pData.active = false;
+                if (pData.uiBtn) pData.uiBtn.classList.add('eliminated');
+                if (mesh) {
+                    gsap.to(mesh.scale, {x:0, y:0, duration: 0.5});
+                    if (mesh.userData.trail) mesh.userData.trail.mesh.visible = false;
+                }
+            } else {
+                pData.active = true;
+                if (pData.uiBtn) pData.uiBtn.classList.remove('eliminated');
+                if (mesh) {
+                    gsap.to(mesh.scale, {x: avatarSizeScale, y: avatarSizeScale, duration: 0.5});
+                    mesh.userData.isFrozen = false;
+                    if (mesh.userData.freezeRing) mesh.userData.freezeRing.material.opacity = 0;
+                    if (mesh.userData.trail && isTrailsEnabled) mesh.userData.trail.mesh.visible = true;
+                }
+            }
+        }
+
+        function applyAllSyncedPlayerStates() {
+            if (!playersData || playersData.length === 0) return;
+            playersData.forEach(p => {
+                applySyncedPlayerState(p.id);
+            });
+            
+            if (v2State && v2State.winnerId !== null && v2State.winnerId !== undefined) {
+                const winIdInt = parseInt(String(v2State.winnerId));
+                if (!winnerMode) {
+                    triggerWin(winIdInt);
+                }
+            } else {
+                if (winnerMode) {
+                    winnerMode = false;
+                    resetExplosion();
+                    updateTimerDisplay();
+                }
+            }
+        }
+
+        function resetAllStates() {
+            stopTimer();
+            isExploded = false;
+            winnerMode = false;
+            resetExplosion();
+            updateTimerDisplay();
+            if (centerSprite) {
+                centerSprite.scale.set(60 * (centerTextSize/2), 30 * (centerTextSize/2), 1);
+            }
+            playersData.forEach(p => { 
+                p.active = true; 
+                if (p.uiBtn) p.uiBtn.classList.remove('eliminated'); 
+                const mesh = playerMeshes.find(m => m.userData.id === p.id);
+                if(mesh) { 
+                    gsap.to(mesh.scale, {x:avatarSizeScale, y:avatarSizeScale, duration: 0.5});
+                    mesh.userData.isFrozen = false;
+                    if(mesh.userData.freezeRing) mesh.userData.freezeRing.material.opacity = 0;
+                    if(mesh.userData.trail && isTrailsEnabled) mesh.userData.trail.mesh.visible = true;
+                }
+            });
+        }
+
         function initPlayers() {
             playerMeshes.forEach(m => { 
                 if(m.userData.trail) m.userData.trail.dispose();
@@ -1287,6 +1536,8 @@
                 document.getElementById('player-list-container').appendChild(btn);
                 playersData.push({ id: i, active: true, uiBtn: btn });
             });
+
+            initMQTT();
         }
 
         function createPlayerMesh(tex, id, url) {
@@ -1294,22 +1545,17 @@
             const geom = new THREE.CircleGeometry(baseSize, 32);
             const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: true });
             const mesh = new THREE.Mesh(geom, mat);
-            const ring = new THREE.Mesh(new THREE.RingGeometry(baseSize, baseSize + 0.5, 32), new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, transparent: true, opacity: 0 })); // Initial hidden ring
+            const ring = new THREE.Mesh(new THREE.RingGeometry(baseSize, baseSize + 0.5, 32), new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, transparent: true, opacity: 0 })); 
             mesh.add(ring);
             
-            // Initial Random Position on Sphere
             const phi = Math.acos( -1 + ( 2 * id ) / PLAYER_CONFIG.length ); const theta = Math.sqrt( PLAYER_CONFIG.length * Math.PI ) * phi;
             mesh.position.setFromSphericalCoords(avatarOrbitRadius, phi, theta);
             
-            // Random Velocity
             const vel = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize();
-
-            // Initialize Trail
             const trail = new RibbonTrail(trailGroup);
 
             mesh.userData = { id: id, velocity: vel, active: true, isPlayer: true, trail: trail, isFrozen: false, freezeRing: ring };
             mesh.scale.setScalar(avatarSizeScale);
-            
             mesh.renderOrder = 999; 
             
             playerGroup.add(mesh); playerMeshes.push(mesh); playerMeshes.sort((a,b) => a.userData.id - b.userData.id);
@@ -1322,7 +1568,6 @@
             
             const mesh = playerMeshes.find(m => m.userData.id === index); 
             if(mesh) {
-                // Eliminate: hide mesh and trail
                 gsap.to(mesh.scale, {x:0, y:0, duration: 0.5});
                 if(mesh.userData.trail) mesh.userData.trail.mesh.visible = false;
             }
@@ -1404,7 +1649,7 @@
             stopTimer(); timerRemaining = timerDuration; isExploded = false; winnerMode = false; resetExplosion(); updateTimerDisplay(); if(!isTimerMode) updateCenterText("UNO INFINITY");
             playersData.forEach(p => { 
                 p.active = true; 
-                p.uiBtn.classList.remove('eliminated'); 
+                if (p.uiBtn) p.uiBtn.classList.remove('eliminated'); 
                 const mesh = playerMeshes.find(m => m.userData.id === p.id);
                 if(mesh) { 
                     gsap.to(mesh.scale, {x:avatarSizeScale, y:avatarSizeScale, duration: 0.5});
@@ -1441,14 +1686,12 @@
         function triggerExplosion() {
             isExploded = true; isTimerRunning = false; updateCenterText("GAME\nOVER"); playExplosionSound(); 
             cardMeshes.forEach(mesh => { const dir = mesh.position.clone().normalize(); if (dir.lengthSq() === 0) dir.set(0,1,0); mesh.userData.velocity.copy(dir.multiplyScalar(5 + Math.random() * 5)); });
-            // Optimization 4: Explode avatars too
             playerMeshes.forEach(mesh => { const dir = mesh.position.clone().normalize(); if (dir.lengthSq() === 0) dir.set(0,1,0); mesh.userData.velocity.copy(dir.multiplyScalar(5 + Math.random() * 5)); });
         }
         function resetExplosion() { 
             cardMeshes.forEach(mesh => { mesh.userData.velocity.set(0,0,0); }); 
             playerMeshes.forEach((mesh, id) => { 
                 mesh.userData.velocity.copy(new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).normalize().multiplyScalar(0.2));
-                // Recalculate spherical position
                 const phi = Math.acos( -1 + ( 2 * mesh.userData.id ) / PLAYER_CONFIG.length ); const theta = Math.sqrt( PLAYER_CONFIG.length * Math.PI ) * phi;
                 mesh.position.setFromSphericalCoords(avatarOrbitRadius, phi, theta);
             });
@@ -1498,7 +1741,7 @@
                 const u = mesh.userData; const target = new THREE.Vector3();
                 target.x = u.orbitRadius * Math.sin(u.orbitPhi) * Math.cos(u.orbitTheta); target.y = u.orbitRadius * Math.sin(u.orbitPhi) * Math.sin(u.orbitTheta); target.z = u.orbitRadius * Math.cos(u.orbitPhi);
                 gsap.to(mesh.position, { x: target.x, y: target.y, z: target.z, duration: 1.5, ease: "elastic.out(1, 0.5)", delay: Math.random() * 0.3 });
-                gsap.to(mesh.rotation, { x: Math.random()*Math.PI, y: Math.random()*Math.PI, z: 0, duration: 1.5 });
+                gsap.to(mesh.rotation, { x: Math.random() * Math.PI, y: Math.random() * Math.PI, z: 0, duration: 1.5 });
             });
         }
 
@@ -1510,7 +1753,18 @@
         });
 
         function tryFullscreenAndLock() {
-            const docEl = document.documentElement; if (docEl.requestFullscreen) docEl.requestFullscreen().catch(e => console.log('Fullscreen denied', e));
+            const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+            if (isFullscreen) return; 
+
+            const docEl = document.documentElement; 
+            const requestFullscreen = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+            if (requestFullscreen) {
+                requestFullscreen.call(docEl).then(() => {
+                    if (screen.orientation && screen.orientation.lock) {
+                        screen.orientation.lock('landscape').catch(e => console.log('Orientation lock ignored', e));
+                    }
+                }).catch(e => console.log('Fullscreen denied', e));
+            }
         }
         document.addEventListener('gesturestart', e => e.preventDefault());
         document.addEventListener('gesturechange', e => e.preventDefault());
@@ -1523,18 +1777,12 @@
 
         window.addEventListener('click', onMouseClick); window.addEventListener('dblclick', onDoubleClick); window.addEventListener('resize', onWindowResize);
 
-        // Modify UI logic: btn-toggle-ui removed, logic now handled by split double click
-        
         function toggleLeftUI() { leftUI.classList.toggle('hidden'); }
         function toggleRightUI() { rightUI.classList.toggle('hidden'); }
-        
-        // Init: hide UI by default or show based on need. Let's start with both visible but can slide out.
-        // By default CSS has no 'hidden' class, so they are visible.
         
         function onDoubleClick(event) {
             if (event.target.closest('#header') || event.target.closest('#right-sidebar') || event.target.closest('#info-panel') || event.target.closest('#btn-view-lock-floating')) return;
             
-            // Split screen double click
             const clickX = event.clientX;
             const screenW = window.innerWidth;
             
@@ -1566,30 +1814,19 @@
             if(playerIntersects.length > 0) {
                 const hit = playerIntersects[0].object;
                 
-                // New Logic: 1st Click Lock, 2nd Click (if locked) Kill
                 if (!hit.userData.isFrozen) {
                     hit.userData.isFrozen = true;
                     if(hit.userData.freezeRing) hit.userData.freezeRing.material.opacity = 0.8; 
                 } else {
-                    // Already frozen, double tap confirmed elimination
                     togglePlayer(hit.userData.id, null);
                 }
                 return;
             }
 
-            // 点击空白处解冻
-            const intersects = raycaster.intersectObjects(cardMeshes);
-            if (intersects.length > 0) { 
-                if (!isInteractionEnabled) return;
-                const target = intersects[0].object; if (activeCard !== target) focusCard(target); 
-            } else { 
-                // Unlock all players if clicked empty space
-                playerMeshes.forEach(p => {
-                    p.userData.isFrozen = false;
-                    if(p.userData.freezeRing) p.userData.freezeRing.material.opacity = 0;
-                });
-                if (activeCard) closeCard(); 
-            }
+            playerMeshes.forEach(p => {
+                p.userData.isFrozen = false;
+                if(p.userData.freezeRing) p.userData.freezeRing.material.opacity = 0;
+            });
         }
 
         function focusCard(mesh) {
@@ -1653,8 +1890,36 @@
             gsap.to(sortedMeshes.map(m => m.userData), { galaxyFlipAngle: targetAngle, duration: 0.8, stagger: 0.002, ease: "power2.inOut", overwrite: true });
         }
 
+        document.getElementById('btn-import-card-urls').addEventListener('click', () => {
+            const text = document.getElementById('card-urls-input').value.trim();
+            if (!text) {
+                alert("请输入URL地址列表。");
+                return;
+            }
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0 && line.startsWith('http'));
+            if (lines.length === 0) {
+                alert("未发现任何有效的URL图片地址（地址须以http开头）。");
+                return;
+            }
+            cardUrls = lines;
+            localStorage.setItem('uno_custom_card_urls_list', JSON.stringify(cardUrls));
+            alert(`成功自动解析并加载 ${cardUrls.length} 张卡牌！正在重新构建 3D 卡牌星空...`);
+            textureCache.clear();
+            materialCache.clear();
+            initCards(currentMultiplier);
+        });
+
+        document.getElementById('btn-export-card-urls').addEventListener('click', () => {
+            document.getElementById('card-urls-input').value = cardUrls.join('\n');
+            alert("当前卡牌所有URL已成功导出到上方文本框内！");
+        });
+
+        const cardUrlsInput = document.getElementById('card-urls-input');
+        if (cardUrlsInput) {
+            cardUrlsInput.value = cardUrls.join('\n');
+        }
+
         function animate() {
-            // Fix render order
             if(centerSprite) centerSprite.renderOrder = 9999;
             playerMeshes.forEach(mesh => mesh.renderOrder = 1);
 
@@ -1671,10 +1936,9 @@
             if (isPlayerAvatarsVisible && !isExploded) {
                 let urgency = 0; if(isTimerRunning && timerRemaining > 0) urgency = Math.pow(1 - (timerRemaining / timerDuration), 2);
                 
-                // 优化：匀速运动模式下（光条开启），不使用紧迫感加速
                 let moveSpeed;
                 if(isTrailsEnabled) {
-                    moveSpeed = 0.5 * delta * 50 * avatarSpeedMultiplier; // 恒定速度
+                    moveSpeed = 0.5 * delta * 50 * avatarSpeedMultiplier; 
                 } else {
                     moveSpeed = (0.2 + urgency * 0.8) * delta * 50 * avatarSpeedMultiplier;
                 }
@@ -1685,10 +1949,8 @@
                     
                     if (mesh.userData.isFrozen) { 
                         mesh.lookAt(camera.position); 
-                        // Visual cue for frozen state
                         if(mesh.userData.freezeRing) {
                              mesh.userData.freezeRing.rotation.z += delta; 
-                             // Keep ring visible if frozen
                              mesh.userData.freezeRing.material.opacity = 0.8;
                         }
                         return; 
@@ -1697,7 +1959,6 @@
                     const u = mesh.userData;
                     u.velocity.add(new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5).multiplyScalar(0.02));
                     
-                    // 优化：光条开启时，禁用物理碰撞
                     if(!isTrailsEnabled) {
                         playerMeshes.forEach(other => {
                             if (other === mesh) return; const distSq = mesh.position.distanceToSquared(other.position);
@@ -1732,7 +1993,6 @@
             if(centerSprite && !centerSprite.visible) { centerLight.intensity = 0; }
             controls.update(); updatePhysics(); 
 
-            // Galaxy Logic
             if (currentLayout === 'galaxy' && !isExploded) {
                 cardGroup.rotation.y += 0.001 * speedMultiplier;
                 const camDist = camera.position.length(); const isInside = camDist < 100; 
